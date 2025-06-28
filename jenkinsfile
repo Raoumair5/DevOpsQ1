@@ -2,12 +2,11 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'node18'
+        nodejs 'Nodejs' // Change this to match your tool name in Jenkins
     }
 
     environment {
-        SONAR_TOKEN = credentials('sonar-token')
-        DEFAULT_RECIPIENTS = 'yourteam@gmail.com'
+        DEFAULT_RECIPIENTS = '230466@students.au.edu.pk'  // Set to your team or Gmail
         MIN_COVERAGE = '80'
     }
 
@@ -32,20 +31,19 @@ pipeline {
             }
         }
 
-        stage('Lint') {
-                stage('Lint') {
-                    steps {
-                        sh 'npm run lint'
-                    }
-                }
+        stage('Lint Check') {
+            steps {
+                sh 'npm run lint'
+            }
         }
+
         stage('Build') {
             steps {
                 sh 'npm run build'
             }
         }
 
-        stage('Archive if Tagged Release') {
+        stage('Archive if Release Tag') {
             when {
                 allOf {
                     branch 'main'
@@ -61,16 +59,28 @@ pipeline {
     post {
         success {
             emailext(
-                subject: "✅ Build #${env.BUILD_NUMBER} Succeeded",
+                subject: "✅ SUCCESS - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 to: "${env.DEFAULT_RECIPIENTS}",
-                body: "Build succeeded. Details: ${env.BUILD_URL}"
+                body: """Build succeeded!
+
+✔ Job: ${env.JOB_NAME}
+✔ Branch: ${env.BRANCH_NAME}
+✔ Build: ${env.BUILD_URL}
+"""
             )
         }
         failure {
             emailext(
-                subject: "❌ Build #${env.BUILD_NUMBER} Failed",
+                subject: "❌ FAILURE - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 to: "${env.DEFAULT_RECIPIENTS}",
-                body: "Build failed. Details: ${env.BUILD_URL}"
+                body: """Build failed.
+
+✘ Job: ${env.JOB_NAME}
+✘ Branch: ${env.BRANCH_NAME}
+✘ URL: ${env.BUILD_URL}
+
+Please check the console output for details.
+"""
             )
         }
     }
