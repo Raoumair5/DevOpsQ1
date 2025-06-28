@@ -1,0 +1,95 @@
+pipeline {
+    agent any
+
+    tools {
+        nodejs 'node18'
+    }
+
+    environment {
+        SONAR_TOKEN = credentials('sonar-token')
+        DEFAULT_RECIPIENTS = 'yourteam@gmail.com'
+        MIN_COVERAGE = '80'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Install & Test') {
+            steps {
+                sh 'npm ci'
+                sh 'npm test'
+            }
+            post {
+                always {
+                    junit 'coverage/junit.xml'
+                    cobertura coberturaReportFile: 'coverage/cobertura-coverage.xml',
+                              lineCoverageTargets: "${env.MIN_COVERAGE},${env.MIN_COVERAGE},${env.MIN_COVERAGE}"
+                }
+            }
+        }
+
+        stage('Lint and Sonar') {
+            parallel {
+                stage('Lint') {
+                    steps {
+                        sh 'npm run lint'
+                    }
+                }
+                stage('SonarQube Analysis') {
+                    steps {
+                        withSonarQubeEnv('sonar') {
+                            sh 'sonar-scanner'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Wait for Sonar Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'npm run build'
+            }
+        }
+
+        stage('Archive if Tagged Release') {
+            when {
+                allOf {
+                    branch 'main'
+                    tag pattern: "release.*", comparator: "REGEXP"
+                }
+            }
+            steps {
+                archiveArtifacts artifacts: 'dist/**', fingerprint: true
+            }
+        }
+    }
+
+    post {
+        success {
+            emailext(
+                subject: "✅ Build #${env.BUILD_NUMBER} Succeeded",
+                to: "${env.DEFAULT_RECIPIENTS}",
+                body: "Build succeeded. Details: ${env.BUILD_URL}"
+            )
+        }
+        failure {
+            emailext(
+                subject: "❌ Build #${env.BUILD_NUMBER} Failed",
+                to: "${env.DEFAULT_RECIPIENTS}",
+                body: "Build failed. Details: ${env.BUILD_URL}"
+            )
+        }
+    }
+}
